@@ -25,8 +25,7 @@ class Card(Enum):
     K = "K"
     A = "A"
     TWO = "2"
-    SMALL_JOKER = "SMALLJOKER"
-    BIG_JOKER = "BIGJOKER"
+    JOKER = "JOKER"
 
 
 class Mark(Enum):

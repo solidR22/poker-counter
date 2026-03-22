@@ -66,6 +66,7 @@ class SettingsPanel(ttk.Frame):
             "screenshot_interval": tk.DoubleVar(value=0.1),
             "game_start_interval": tk.DoubleVar(value=1.0),
         }
+        self.template_scales_var = tk.StringVar(value="0.85,0.95,1.0,1.05,1.15")
         self.log_vars = {"level": tk.StringVar(value="INFO"), "retention": tk.IntVar(value=3)}
         self.hotkey_vars = {key: tk.StringVar() for key in ("QUIT", "OPEN_LOG", "OPEN_SETTINGS", "RESET")}
         self.gui_vars: dict[str, dict[str, tk.Variable]] = {}
@@ -192,6 +193,8 @@ class SettingsPanel(ttk.Frame):
         for idx, (key, label) in enumerate(rows):
             ttk.Label(frame, text=label).grid(row=idx, column=0, sticky="w", pady=4)
             ttk.Entry(frame, textvariable=self.threshold_vars[key]).grid(row=idx, column=1, sticky="ew", padx=(8, 0), pady=4)
+        ttk.Label(frame, text="模板缩放比例").grid(row=len(rows), column=0, sticky="w", pady=4)
+        ttk.Entry(frame, textvariable=self.template_scales_var).grid(row=len(rows), column=1, sticky="ew", padx=(8, 0), pady=4)
 
     def _build_window_tab(self) -> None:
         self.window_tab.columnconfigure(0, weight=1)
@@ -237,6 +240,7 @@ class SettingsPanel(ttk.Frame):
             self.threshold_vars[key].set(config_model.THRESHOLDS[key])
         self.threshold_vars["screenshot_interval"].set(config_model.SCREENSHOT_INTERVAL)
         self.threshold_vars["game_start_interval"].set(config_model.GAME_START_INTERVAL)
+        self.template_scales_var.set(",".join(str(scale) for scale in config_model.TEMPLATE_SCALES))
         self.log_vars["level"].set(config_model.LOG_LEVEL)
         self.log_vars["retention"].set(config_model.LOG_RETENTION)
         for key, value in config_model.HOTKEYS.items():
@@ -256,12 +260,20 @@ class SettingsPanel(ttk.Frame):
         self._capture_screen()
 
     def build_config_dict(self) -> dict:
+        scale_values = [
+            float(value.strip())
+            for value in self.template_scales_var.get().split(",")
+            if value.strip()
+        ]
+        if not scale_values:
+            raise ValueError("模板缩放比例不能为空")
         config = {
             "REGIONS": {key: [value[0][:], value[1][:]] for key, value in self._regions.items()},
             "GAME_WINDOW": {"OFFSET_X": int(self._game_origin[0]), "OFFSET_Y": int(self._game_origin[1])},
             "THRESHOLDS": {key: float(self.threshold_vars[key].get()) for key in ("card", "landlord", "pass", "wait", "gameover")},
             "SCREENSHOT_INTERVAL": float(self.threshold_vars["screenshot_interval"].get()),
             "GAME_START_INTERVAL": float(self.threshold_vars["game_start_interval"].get()),
+            "TEMPLATE_SCALES": scale_values,
             "GUI": {},
             "HOTKEYS": {key: self.hotkey_vars[key].get().strip() for key in self.hotkey_vars},
             "LOG_LEVEL": self.log_vars["level"].get(),

@@ -37,6 +37,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "SCREENSHOT_INTERVAL": 0.1,
     "GAME_START_INTERVAL": 1.0,
+    "TEMPLATE_SCALES": [0.85, 0.95, 1.0, 1.05, 1.15],
     "GUI": {
         "MAIN": {
             "DISPLAY": True,
@@ -112,7 +113,7 @@ def save_config(config_data: dict[str, Any]) -> None:
 
 def reload_config() -> dict[str, Any]:
     global config, REGIONS, GAME_WINDOW, THRESHOLDS, SCREENSHOT_INTERVAL
-    global GAME_START_INTERVAL, GUI, HOTKEYS, LOG_LEVEL, LOG_RETENTION
+    global GAME_START_INTERVAL, TEMPLATE_SCALES, GUI, HOTKEYS, LOG_LEVEL, LOG_RETENTION
 
     config = load_config(CONFIG_PATH)
     REGIONS = config["REGIONS"]
@@ -120,6 +121,7 @@ def reload_config() -> dict[str, Any]:
     THRESHOLDS = config["THRESHOLDS"]
     SCREENSHOT_INTERVAL = config["SCREENSHOT_INTERVAL"]
     GAME_START_INTERVAL = config["GAME_START_INTERVAL"]
+    TEMPLATE_SCALES = config["TEMPLATE_SCALES"]
     GUI = config["GUI"]
     HOTKEYS = config["HOTKEYS"]
     LOG_LEVEL = config["LOG_LEVEL"]
@@ -133,6 +135,7 @@ GAME_WINDOW = config["GAME_WINDOW"]
 THRESHOLDS = config["THRESHOLDS"]
 SCREENSHOT_INTERVAL = config["SCREENSHOT_INTERVAL"]
 GAME_START_INTERVAL = config["GAME_START_INTERVAL"]
+TEMPLATE_SCALES = config["TEMPLATE_SCALES"]
 GUI = config["GUI"]
 HOTKEYS = config["HOTKEYS"]
 LOG_LEVEL = config["LOG_LEVEL"]

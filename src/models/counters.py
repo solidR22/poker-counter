@@ -2,6 +2,8 @@
 记牌计数器。
 """
 
+from __future__ import annotations
+
 import tkinter as tk
 from dataclasses import dataclass
 
@@ -21,8 +23,7 @@ def _modify_cardvar_dict(intvar_dict: CardIntVarDict, new_values: CardIntDict) -
 
 
 FULL_COUNT = {card: 4 for card in Card}
-FULL_COUNT[Card.SMALL_JOKER] = 1
-FULL_COUNT[Card.BIG_JOKER] = 1
+FULL_COUNT[Card.JOKER] = 1
 EMPTY_COUNT = {card: 0 for card in Card}
 
 
@@ -37,8 +38,9 @@ class CardCounter:
         self.player1_remaining_var = tk.IntVar(value=17)
         self.player2_remaining_var = tk.IntVar(value=17)
         self.player3_remaining_var = tk.IntVar(value=17)
+        self.my_cards_text_var = tk.StringVar(value="手牌识别：暂无")
 
-        self.remaining_count = 54
+        self.remaining_count = 53
         self.player1_total = 17
         self.player2_total = 17
         self.player3_total = 17
@@ -59,23 +61,26 @@ class CardCounter:
         self.player3_total = 20 if landlord is Player.RIGHT else 17
         self._sync_remaining_vars()
 
+    def set_my_cards_text(self, cards_text: str) -> None:
+        self.my_cards_text_var.set(cards_text)
+
     def reset(self) -> None:
         _modify_cardvar_dict(self.remaining_counter, FULL_COUNT)
         _modify_cardvar_dict(self.player1_counter, EMPTY_COUNT)
         _modify_cardvar_dict(self.player3_counter, EMPTY_COUNT)
-        self.remaining_count = 54
+        self.remaining_count = 53
         self.player1_total = 17
         self.player2_total = 17
         self.player3_total = 17
         self.player1_count = 0
         self.player2_count = 0
         self.player3_count = 0
+        self.my_cards_text_var.set("手牌识别：暂无")
         self._sync_remaining_vars()
         logger.info("已重置记牌计数器")
 
     def mark(self, card: Card, player: Player) -> None:
         self.remaining_counter[card].set(self.remaining_counter[card].get() - 1)
-
         match player:
             case Player.LEFT:
                 self.player1_counter[card].set(self.player1_counter[card].get() + 1)
@@ -85,10 +90,8 @@ class CardCounter:
             case Player.RIGHT:
                 self.player3_counter[card].set(self.player3_counter[card].get() + 1)
                 self.player3_count += 1
-
         self.remaining_count -= 1
         self._sync_remaining_vars()
-
         if self.remaining_counter[card].get() < 0:
             logger.warning("牌 {} 被标记后剩余数量小于 0，可能识别有误", card.value)
 

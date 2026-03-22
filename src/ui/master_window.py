@@ -5,17 +5,20 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 
+import numpy as np
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 from loguru import logger
 
 from core.backend_thread import BackendThread
+from functions.match_template import identify_cards_with_matches
 from functions.windows_offset import calculate_offset
 from misc.custom_types import ConfigDict, WindowsType
-from models.config import GUI, reload_config
+from models.config import GUI, THRESHOLDS, reload_config
 from models.runtime_status import RuntimeStatus
 
 from .counter_window import CounterWindow
@@ -30,7 +33,9 @@ class MasterWindow(tk.Tk):
         self.windows: list[CounterWindow] = []
         self.status_var = tk.StringVar(value="状态：未启动")
         self.preview_title_var = tk.StringVar(value="识别预览：等待识别")
+        self.preview_zoom_var = tk.StringVar(value="100%")
         self._preview_photo: ImageTk.PhotoImage | None = None
+        self._preview_zoom = 1.0
 
         self._setup_window()
         self._build_layout()
@@ -41,7 +46,7 @@ class MasterWindow(tk.Tk):
     def _setup_window(self) -> None:
         self.title("斗地主记牌器")
         self.configure(bg="#edf2f7")
-        self.minsize(1180, 760)
+        self.minsize(1240, 780)
 
         style = ttk.Style(self)
         style.theme_use("clam")
@@ -70,12 +75,10 @@ class MasterWindow(tk.Tk):
 
         self.notebook = ttk.Notebook(root)
         self.notebook.grid(row=1, column=0, sticky="nsew")
-
         self.control_tab = ttk.Frame(self.notebook, padding=16, style="App.TFrame")
         self.settings_tab = ttk.Frame(self.notebook, padding=8, style="App.TFrame")
         self.notebook.add(self.control_tab, text="记牌器")
         self.notebook.add(self.settings_tab, text="参数设置")
-
         self._build_control_tab()
         self._build_settings_tab()
 
@@ -102,8 +105,9 @@ class MasterWindow(tk.Tk):
         self.start_button.grid(row=0, column=0, padx=(0, 8))
         self.stop_button = ttk.Button(actions, text="关闭记牌器", command=self._switch_off, state="disabled")
         self.stop_button.grid(row=0, column=1, padx=(0, 8))
-        ttk.Button(actions, text="切到参数设置", command=self.show_settings).grid(row=0, column=2, padx=(0, 8))
-        ttk.Button(actions, text="退出软件", command=self.destroy).grid(row=0, column=3)
+        ttk.Button(actions, text="本地图像调试", command=self._debug_local_image).grid(row=0, column=2, padx=(0, 8))
+        ttk.Button(actions, text="切到参数设置", command=self.show_settings).grid(row=0, column=3, padx=(0, 8))
+        ttk.Button(actions, text="退出软件", command=self.destroy).grid(row=0, column=4)
 
         status_card = ttk.LabelFrame(self.control_tab, text="运行状态", style="Section.TLabelframe", padding=16)
         status_card.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
@@ -112,7 +116,7 @@ class MasterWindow(tk.Tk):
         ttk.Label(status_card, textvariable=self.status_var, style="Status.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             status_card,
-            text="这里会实时显示当前识别阶段、置信度、最近结果和成功识别历史。",
+            text="这里会实时显示识别阶段、最近结果、成功历史和本地图像调试结果。",
             background="#ffffff",
             foreground="#52606d",
             font=("Microsoft YaHei UI", 10),
@@ -135,10 +139,28 @@ class MasterWindow(tk.Tk):
         preview_card = ttk.LabelFrame(self.control_tab, text="识别预览图", style="Section.TLabelframe", padding=16)
         preview_card.grid(row=1, column=1, sticky="nsew")
         preview_card.columnconfigure(0, weight=1)
-        preview_card.rowconfigure(1, weight=1)
-        ttk.Label(preview_card, textvariable=self.preview_title_var, background="#ffffff").grid(row=0, column=0, sticky="w")
+        preview_card.rowconfigure(2, weight=1)
+
+        preview_header = ttk.Frame(preview_card)
+        preview_header.grid(row=0, column=0, sticky="ew")
+        preview_header.columnconfigure(0, weight=1)
+        ttk.Label(preview_header, textvariable=self.preview_title_var, background="#ffffff").grid(row=0, column=0, sticky="w")
+        ttk.Button(preview_header, text="-", width=3, command=lambda: self._change_preview_zoom(0.8)).grid(row=0, column=1, padx=(8, 4))
+        ttk.Button(preview_header, text="+", width=3, command=lambda: self._change_preview_zoom(1.25)).grid(row=0, column=2, padx=4)
+        ttk.Button(preview_header, text="重置", command=self._reset_preview_zoom).grid(row=0, column=3, padx=(4, 8))
+        ttk.Label(preview_header, textvariable=self.preview_zoom_var, background="#ffffff").grid(row=0, column=4, sticky="e")
+
+        ttk.Label(
+            preview_card,
+            text="可用按钮或鼠标滚轮放大缩小预览图。",
+            background="#ffffff",
+            foreground="#52606d",
+            font=("Microsoft YaHei UI", 9),
+        ).grid(row=1, column=0, sticky="w", pady=(8, 10))
+
         self.preview_label = tk.Label(preview_card, bg="#f8fafc", relief="solid", borderwidth=1)
-        self.preview_label.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
+        self.preview_label.grid(row=2, column=0, sticky="nsew")
+        self.preview_label.bind("<MouseWheel>", self._on_preview_mousewheel)  # type: ignore[override]
 
     def _build_settings_tab(self) -> None:
         self.settings_tab.columnconfigure(0, weight=1)
@@ -167,6 +189,19 @@ class MasterWindow(tk.Tk):
 
     def show_settings(self) -> None:
         self.notebook.select(self.settings_tab)
+
+    def _change_preview_zoom(self, factor: float) -> None:
+        self._preview_zoom = min(4.0, max(0.25, self._preview_zoom * factor))
+        self.preview_zoom_var.set(f"{int(self._preview_zoom * 100)}%")
+        self._refresh_runtime_status()
+
+    def _reset_preview_zoom(self) -> None:
+        self._preview_zoom = 1.0
+        self.preview_zoom_var.set("100%")
+        self._refresh_runtime_status()
+
+    def _on_preview_mousewheel(self, event: tk.Event) -> None:  # type: ignore[override]
+        self._change_preview_zoom(1.1 if event.delta > 0 else 0.9)
 
     def _schedule_status_refresh(self) -> None:
         self._refresh_runtime_status()
@@ -213,10 +248,68 @@ class MasterWindow(tk.Tk):
         preview_png = snapshot.get("preview_png")
         if preview_png:
             image = Image.open(BytesIO(preview_png))
-            self._preview_photo = ImageTk.PhotoImage(image)
+            zoomed = image.resize(
+                (max(1, int(image.width * self._preview_zoom)), max(1, int(image.height * self._preview_zoom))),
+                Image.Resampling.NEAREST,
+            )
+            self._preview_photo = ImageTk.PhotoImage(zoomed)
             self.preview_label.config(image=self._preview_photo, text="")
         else:
             self.preview_label.config(image="", text="暂无图像", font=("Microsoft YaHei UI", 10))
+
+    def _render_debug_preview(
+        self,
+        title: str,
+        image: Image.Image,
+        matches: list[dict[str, int | float | str]],
+        cards_result: dict[str, int],
+    ) -> None:
+        preview = image.convert("RGB")
+        draw = ImageDraw.Draw(preview)
+        for match in matches:
+            x = int(match["x"])
+            y = int(match["y"])
+            w = int(match["w"])
+            h = int(match["h"])
+            label = str(match["label"])
+            confidence = float(match["confidence"])
+            scale = match.get("scale")
+            draw.rectangle((x, y, x + w, y + h), outline="#ff3b30", width=2)
+            note = f"{label} {confidence:.2f}"
+            if scale is not None:
+                note += f" x{scale}"
+            draw.text((x, max(0, y - 14)), note, fill="#ffd60a")
+
+        max_width = 420
+        if preview.width > max_width:
+            ratio = max_width / preview.width
+            preview = preview.resize((int(preview.width * ratio), int(preview.height * ratio)))
+
+        buffer = BytesIO()
+        preview.save(buffer, format="PNG")
+        self.runtime_status.update(
+            phase="本地图像调试",
+            preview_title=title,
+            preview_png=buffer.getvalue(),
+            last_cards=cards_result,
+            message="已完成本地图像调试识别",
+        )
+
+    def _debug_local_image(self) -> None:
+        file_path = filedialog.askopenfilename(
+            title="选择要调试的本地图像",
+            filetypes=[("图片文件", "*.png;*.jpg;*.jpeg;*.bmp"), ("所有文件", "*.*")],
+        )
+        if not file_path:
+            return
+
+        image_path = Path(file_path)
+        image = Image.open(image_path).convert("L")
+        array = np.array(image)
+        cards, matches = identify_cards_with_matches(array, THRESHOLDS["card"])
+        cards_result = {card.value: count for card, count in cards.items()}
+        self._render_debug_preview(f"本地图像调试：{image_path.name}", image, matches, cards_result)
+        messagebox.showinfo("调试完成", f"识别结果：{cards_result or '暂无'}")
 
     def _switch_on(self) -> None:
         if self.backend.is_running:

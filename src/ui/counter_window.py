@@ -22,7 +22,6 @@ from models.labels import LabelProperties
 class CounterWindow(tk.Toplevel):
     def __init__(self, window_type: WindowsType, parent: tk.Tk) -> None:
         super().__init__(parent) if parent else super().__init__()
-
         self.PARENT = parent
         self.WINDOW_TYPE = window_type
         config = GUI.get(self.WINDOW_TYPE.name, {})
@@ -32,7 +31,6 @@ class CounterWindow(tk.Toplevel):
         self._setup_window_style(config)
         self._setup_window_position(config)
         self._setup_binding()
-
         logger.success("{}已创建", window_type.value)
 
     def _setup_window_style(self, config: ConfigDict) -> None:
@@ -45,11 +43,9 @@ class CounterWindow(tk.Toplevel):
 
     def _setup_window_position(self, config: ConfigDict) -> None:
         self.update_idletasks()
-        window_width = self.winfo_width()
-        window_height = self.winfo_height()
         x_offset, y_offset = calculate_offset(
-            window_width,
-            window_height,
+            self.winfo_width(),
+            self.winfo_height(),
             config.get("OFFSET_X"),
             config.get("OFFSET_Y"),
             config.get("CENTER_X"),
@@ -63,14 +59,12 @@ class CounterWindow(tk.Toplevel):
     def _setup_binding(self) -> None:
         self.bind("<Button-1>", self._on_drag_start)  # type: ignore[override]
         self.bind("<B1-Motion>", self._on_drag_move)  # type: ignore[override]
-
         hotkey_dict: dict[str, Callable[[Any], None]] = {
             "QUIT": lambda event: self.PARENT.destroy(),
             "OPEN_LOG": lambda event: open_latest_log(),
             "OPEN_SETTINGS": lambda event: self.PARENT.show_settings(),
             "RESET": lambda event: self._reset(),
         }
-
         for hotkey, callback in hotkey_dict.items():
             if hotkey in HOTKEYS:
                 try:
@@ -80,12 +74,14 @@ class CounterWindow(tk.Toplevel):
 
     def _create_table(self) -> None:
         counter = CardCounter()
-
         if self.WINDOW_TYPE == WindowsType.MAIN:
             summary = ttk.Frame(self)
             summary.pack(fill="x")
             ttk.Label(summary, text="我的剩余牌数：").pack(side="left", padx=(2, 4))
             ttk.Label(summary, textvariable=counter.player2_remaining_var).pack(side="left")
+            hand = ttk.Frame(self)
+            hand.pack(fill="x")
+            ttk.Label(hand, textvariable=counter.my_cards_text_var, wraplength=420, justify="left").pack(side="left", padx=(2, 4))
         elif self.WINDOW_TYPE == WindowsType.LEFT:
             summary = ttk.Frame(self)
             summary.pack(fill="x")
@@ -111,49 +107,23 @@ class CounterWindow(tk.Toplevel):
             WindowsType.RIGHT: lambda card: counter.player3_counter[card],
         }
         get_count_text = get_count[self.WINDOW_TYPE]
-
         self._card_labels: dict[Card, tk.Label] = {}
         self._count_labels: dict[Card, tk.Label] = {}
         font_size = GUI.get(self.WINDOW_TYPE.name, {}).get("FONT_SIZE", 25)
 
         def create_label(**kwargs: Any) -> tk.Label:
-            return tk.Label(
-                self._table_frame,
-                anchor="center",
-                relief="solid",
-                highlightbackground="red",
-                highlightthickness=1,
-                width=2,
-                **kwargs,
-            )
-
-        display_names = {
-            Card.SMALL_JOKER: "小王",
-            Card.BIG_JOKER: "大王",
-        }
+            return tk.Label(self._table_frame, anchor="center", relief="solid", highlightbackground="red", highlightthickness=1, width=2, **kwargs)
 
         for idx, card in enumerate(Card):
-            label_text = display_names.get(card, card.value)
-            card_label = create_label(
-                text=label_text,
-                font=("Microsoft YaHei UI", font_size),
-                bg="lightblue",
-                fg="black",
-            )
-            count_label = create_label(
-                textvariable=get_count_text(card),
-                font=("Microsoft YaHei UI", font_size, "bold"),
-                bg="lightyellow",
-                fg="black",
-            )
-
+            label_text = "王" if card is Card.JOKER else card.value
+            card_label = create_label(text=label_text, font=("Microsoft YaHei UI", font_size), bg="lightblue", fg="black")
+            count_label = create_label(textvariable=get_count_text(card), font=("Microsoft YaHei UI", font_size, "bold"), bg="lightyellow", fg="black")
             if self.WINDOW_TYPE == WindowsType.MAIN:
                 card_label.grid(row=0, column=idx, sticky="nsew")
                 count_label.grid(row=1, column=idx, sticky="nsew")
             else:
                 card_label.grid(row=idx, column=0, sticky="nsew")
                 count_label.grid(row=idx, column=1, sticky="nsew")
-
             self._card_labels[card] = card_label
             self._count_labels[card] = count_label
 

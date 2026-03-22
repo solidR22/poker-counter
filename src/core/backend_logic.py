@@ -135,6 +135,7 @@ class BackendLogic:
             my_cards={card.value: count for card, count in my_cards.items()},
             message="已更新自己的手牌识别结果",
         )
+        self._counter.set_my_cards_text(self._format_cards_text(my_cards))
         self._mark_cards(my_cards, Player.MIDDLE)
         self._counter.player2_count = 0
         self._counter._sync_remaining_vars()  # type: ignore[attr-defined]
@@ -144,6 +145,17 @@ class BackendLogic:
             if not self._keep_running:
                 return
             self.label_properties.text_color.change_style(card, WindowsType.MAIN, "red")
+
+    def _format_cards_text(self, cards: CardIntDict) -> str:
+        if not cards:
+            return "手牌识别：暂无"
+        parts = [f"{card.value}x{count}" for card, count in cards.items()]
+        return "手牌识别：" + " ".join(parts)
+
+    def _refresh_my_cards_display(self) -> None:
+        my_cards, _ = my_cards_region.recognize_cards_with_matches()
+        self._counter.set_my_cards_text(self._format_cards_text(my_cards))
+        self._status.update(my_cards={card.value: count for card, count in my_cards.items()})
 
     def _should_advance_after_marking(self) -> bool:
         region = card_regions[self._current_player]
@@ -201,6 +213,7 @@ class BackendLogic:
 
                 while self._keep_running and not self._is_round_finished():
                     screenshot.update()
+                    self._refresh_my_cards_display()
                     card_regions[self._current_player].update_state()
                     self._status.update(
                         region_states={

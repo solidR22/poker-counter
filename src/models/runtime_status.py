@@ -60,6 +60,11 @@ class RuntimeStatus:
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
+            last_cards = self._data["last_cards"]
+            if isinstance(last_cards, dict):
+                safe_last_cards = dict(last_cards)
+            else:
+                safe_last_cards = {"调试结果": str(last_cards)}
             return {
                 "phase": self._data["phase"],
                 "game_started": self._data["game_started"],
@@ -68,7 +73,7 @@ class RuntimeStatus:
                 "current_player": self._data["current_player"],
                 "region_states": dict(self._data["region_states"]),
                 "my_cards": dict(self._data["my_cards"]),
-                "last_cards": dict(self._data["last_cards"]),
+                "last_cards": safe_last_cards,
                 "recognized_history": list(self._data["recognized_history"]),
                 "preview_title": self._data["preview_title"],
                 "preview_png": self._data["preview_png"],
