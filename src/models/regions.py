@@ -24,6 +24,23 @@ class Region:
     def __post_init__(self) -> None:
         """初始化区域状态并提取区域坐标"""
         self.state: RegionState = RegionState.WAIT
+        self.update_coordinates(self.TOP_LEFT, self.BOTTOM_RIGHT)
+
+    def update_coordinates(
+        self,
+        top_left: tuple[int, int],
+        bottom_right: tuple[int, int],
+    ) -> None:
+        """Update region coordinates in place."""
+        x1, x2 = sorted((top_left[0], bottom_right[0]))
+        y1, y2 = sorted((top_left[1], bottom_right[1]))
+        if x1 == x2:
+            x2 += 1
+        if y1 == y2:
+            y2 += 1
+
+        self.TOP_LEFT = (x1, y1)
+        self.BOTTOM_RIGHT = (x2, y2)
         self._X1: int = self.TOP_LEFT[0]
         self._Y1: int = self.TOP_LEFT[1]
         self._X2: int = self.BOTTOM_RIGHT[0]

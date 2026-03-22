@@ -1,145 +1,279 @@
 """
-主界面组件模块，负责创建主窗口、左侧玩家窗口和右侧玩家窗口，并实时更新记牌器的内容。
+主控制窗口。
 """
 
+from __future__ import annotations
+
 import tkinter as tk
+from tkinter import messagebox, ttk
 
 from loguru import logger
 
 from core.backend_thread import BackendThread
 from functions.windows_offset import calculate_offset
 from misc.custom_types import ConfigDict, WindowsType
-from models.config import GUI
+from models.config import GUI, reload_config
+from models.runtime_status import RuntimeStatus
 
 from .counter_window import CounterWindow
+from .region_editor import SettingsPanel
 
 
 class MasterWindow(tk.Tk):
-    """顶级窗口；显示开始/关闭和退出按钮，并控制后端"""
-
     def __init__(self) -> None:
         super().__init__()
 
-        # 初始化对象
-        self.windows: list[CounterWindow] = []
         self.backend = BackendThread()
+        self.runtime_status = RuntimeStatus()
+        self.windows: list[CounterWindow] = []
+        self.status_var = tk.StringVar(value="状态：未启动")
+        self.debug_text_var = tk.StringVar(value="等待启动")
 
-        # 初始化窗口
-        config = GUI.get("SWITCH", {})
-        self._setup_window_style()
-        self._setup_switch(config)
-        self._setup_exit(config)
-        self._setup_window_position(config)
+        self._setup_window()
+        self._build_layout()
+        self.refresh_layout_from_config()
+        self._schedule_status_refresh()
 
-        logger.success("顶级窗口初始化完毕")
+        logger.success("主控制窗口已创建")
 
-    def _setup_window_style(self) -> None:
-        """设置窗口样式"""
-        self.title("记牌器开关")
-        self.attributes("-topmost", True)  # 置顶  # type: ignore
-        self.overrideredirect(True)  # 去掉窗口边框
-        self.configure(bg="white")  # 窗口背景设为白色
-        self.attributes(  # type: ignore
-            "-transparentcolor", "white"
-        )  # 使白色背景变得透明
+    def _setup_window(self) -> None:
+        self.title("斗地主记牌器")
+        self.configure(bg="#edf2f7")
+        self.minsize(980, 700)
 
-    def _setup_switch(self, config: ConfigDict) -> None:
-        """创建开关按钮"""
-        self.switch = tk.Button(
-            self,
-            text="打开记牌器",
-            command=self._switch_on,
-            width=10,
-            font=("TkDefaultFont", config.get("FONT_SIZE", 12)),  # type: ignore
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        style.configure("App.TFrame", background="#edf2f7")
+        style.configure("Card.TFrame", background="#ffffff")
+        style.configure("Title.TLabel", background="#edf2f7", font=("Microsoft YaHei UI", 18, "bold"))
+        style.configure("Sub.TLabel", background="#edf2f7", foreground="#52606d", font=("Microsoft YaHei UI", 10))
+        style.configure("Primary.TButton", font=("Microsoft YaHei UI", 10, "bold"))
+        style.configure("Status.TLabel", background="#ffffff", font=("Microsoft YaHei UI", 11))
+        style.configure("Section.TLabelframe", background="#ffffff")
+        style.configure("Section.TLabelframe.Label", background="#ffffff", font=("Microsoft YaHei UI", 10, "bold"))
+
+    def _build_layout(self) -> None:
+        root = ttk.Frame(self, style="App.TFrame", padding=16)
+        root.pack(fill="both", expand=True)
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(1, weight=1)
+
+        header = ttk.Frame(root, style="App.TFrame")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        header.columnconfigure(0, weight=1)
+        ttk.Label(header, text="斗地主记牌器", style="Title.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            header,
+            text="在同一个窗口里启动记牌和调整全部参数，便于边看边调。",
+            style="Sub.TLabel",
+        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+
+        self.notebook = ttk.Notebook(root)
+        self.notebook.grid(row=1, column=0, sticky="nsew")
+
+        self.control_tab = ttk.Frame(self.notebook, padding=16, style="App.TFrame")
+        self.settings_tab = ttk.Frame(self.notebook, padding=8, style="App.TFrame")
+        self.notebook.add(self.control_tab, text="记牌器")
+        self.notebook.add(self.settings_tab, text="参数设置")
+
+        self._build_control_tab()
+        self._build_settings_tab()
+
+    def _build_control_tab(self) -> None:
+        self.control_tab.columnconfigure(0, weight=3)
+        self.control_tab.columnconfigure(1, weight=2)
+        self.control_tab.rowconfigure(1, weight=1)
+
+        hero = ttk.Frame(self.control_tab, style="Card.TFrame", padding=18)
+        hero.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
+        hero.columnconfigure(0, weight=1)
+        ttk.Label(hero, text="当前操作", background="#ffffff", font=("Microsoft YaHei UI", 14, "bold")).grid(
+            row=0, column=0, sticky="w"
         )
-        self.switch.pack(padx=0, pady=0)
+        ttk.Label(
+            hero,
+            text="先在“参数设置”中框选头像区、出牌区和手牌区，再回到这里启动记牌。",
+            background="#ffffff",
+            foreground="#52606d",
+            font=("Microsoft YaHei UI", 10),
+        ).grid(row=1, column=0, sticky="w", pady=(6, 14))
 
-    def _setup_exit(self, config: ConfigDict) -> None:
-        """创建退出按钮"""
-        self.exit = tk.Button(
-            self,
-            text="退出程序",
-            command=self.destroy,
-            width=10,
-            font=("TkDefaultFont", config.get("FONT_SIZE", 12)),  # type: ignore
+        actions = ttk.Frame(hero, style="Card.TFrame")
+        actions.grid(row=2, column=0, sticky="w")
+        self.start_button = ttk.Button(actions, text="打开记牌器", style="Primary.TButton", command=self._switch_on)
+        self.start_button.grid(row=0, column=0, padx=(0, 8))
+        self.stop_button = ttk.Button(actions, text="关闭记牌器", command=self._switch_off, state="disabled")
+        self.stop_button.grid(row=0, column=1, padx=(0, 8))
+        ttk.Button(actions, text="切到参数设置", command=self.show_settings).grid(row=0, column=2, padx=(0, 8))
+        ttk.Button(actions, text="退出软件", command=self.destroy).grid(row=0, column=3)
+
+        status_card = ttk.LabelFrame(self.control_tab, text="运行状态", style="Section.TLabelframe", padding=16)
+        status_card.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
+        status_card.columnconfigure(0, weight=1)
+        ttk.Label(status_card, textvariable=self.status_var, style="Status.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            status_card,
+            text="浮窗可拖动到你习惯的位置。参数保存后，浮窗位置和识别框会立即刷新。",
+            background="#ffffff",
+            foreground="#52606d",
+            font=("Microsoft YaHei UI", 10),
+            wraplength=420,
+            justify="left",
+        ).grid(row=1, column=0, sticky="w", pady=(10, 0))
+        self.debug_text = tk.Text(
+            status_card,
+            height=14,
+            wrap="word",
+            font=("Consolas", 10),
+            bg="#f8fafc",
+            relief="solid",
+            borderwidth=1,
         )
-        self.exit.pack(padx=0, pady=0)
+        self.debug_text.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+        self.debug_text.insert("1.0", "等待启动")
+        self.debug_text.configure(state="disabled")
+        status_card.rowconfigure(2, weight=1)
+
+        tips_card = ttk.LabelFrame(self.control_tab, text="设置建议", style="Section.TLabelframe", padding=16)
+        tips_card.grid(row=1, column=1, sticky="nsew")
+        tips_card.columnconfigure(0, weight=1)
+        tips = [
+            "头像区域只框头像和地主角标，尽量不要带到旁边背景。",
+            "出牌区域只框牌面出现的范围，不要把头像或按钮也框进去。",
+            "我的手牌区域尽量覆盖整排手牌，避免漏掉最左和最右的牌。",
+            "如果游戏窗口位置变了，先在设置里改“游戏窗口左上角”，其他框会整体跟随。",
+        ]
+        for idx, tip in enumerate(tips):
+            ttk.Label(
+                tips_card,
+                text=f"{idx + 1}. {tip}",
+                background="#ffffff",
+                font=("Microsoft YaHei UI", 10),
+                wraplength=320,
+                justify="left",
+            ).grid(row=idx, column=0, sticky="w", pady=(0 if idx == 0 else 10, 0))
+
+    def _build_settings_tab(self) -> None:
+        self.settings_tab.columnconfigure(0, weight=1)
+        self.settings_tab.rowconfigure(0, weight=1)
+        self.settings_panel = SettingsPanel(self.settings_tab, on_saved=self.refresh_layout_from_config)
+        self.settings_panel.grid(row=0, column=0, sticky="nsew")
+
+    def refresh_layout_from_config(self) -> None:
+        reload_config()
+        self._setup_window_position(GUI.get("SWITCH", {}))
+        for window in list(self.windows):
+            if window.winfo_exists():
+                window.refresh_position()
 
     def _setup_window_position(self, config: ConfigDict) -> None:
-        """设置窗口偏移量"""
-        self.update_idletasks()  # 刷新窗口大小
-
+        self.update_idletasks()
         window_width = self.winfo_width()
         window_height = self.winfo_height()
-
         x_offset, y_offset = calculate_offset(
             window_width,
             window_height,
-            config.get("OFFSET_X", None),
-            config.get("OFFSET_Y", None),
-            config.get("CENTER_X", None),
-            config.get("CENTER_Y", None),
+            config.get("OFFSET_X"),
+            config.get("OFFSET_Y"),
+            config.get("CENTER_X"),
+            config.get("CENTER_Y"),
         )
+        self.geometry(f"+{x_offset}+{y_offset}")
 
-        self.geometry(f"+{x_offset}+{y_offset}")  # 应用偏移量
-        logger.info(f"开关窗口偏移量为：{x_offset}，{y_offset}")
-        logger.info(f"开关窗口大小为：{window_width}x{window_height}")
+    def show_settings(self) -> None:
+        self.notebook.select(self.settings_tab)
+
+    def _schedule_status_refresh(self) -> None:
+        self._refresh_runtime_status()
+        self.after(300, self._schedule_status_refresh)
+
+    def _refresh_runtime_status(self) -> None:
+        snapshot = self.runtime_status.snapshot()
+        self.status_var.set(f"状态：{snapshot['phase']}")
+        region_state_names = {
+            "WAIT": "等待",
+            "ACTIVE": "可识别",
+            "PASS": "不出",
+        }
+
+        text_lines = [
+            f"阶段：{snapshot['phase']}",
+            f"开局判定：{'已开始' if snapshot['game_started'] else '未开始'}",
+            f"地主：{snapshot['landlord']}",
+            f"当前轮到：{snapshot['current_player']}",
+            f"提示：{snapshot['message']}",
+            "",
+            "地主置信度：",
+        ]
+        confidences = snapshot["landlord_confidences"]
+        if confidences:
+            text_lines.extend([f"  {name}: {value}" for name, value in confidences.items()])
+        else:
+            text_lines.append("  暂无")
+
+        text_lines.append("")
+        text_lines.append("出牌区状态：")
+        region_states = snapshot["region_states"]
+        if region_states:
+            text_lines.extend([f"  {name}: {region_state_names.get(value, value)}" for name, value in region_states.items()])
+        else:
+            text_lines.append("  暂无")
+
+        text_lines.append("")
+        text_lines.append(f"我的手牌识别：{snapshot['my_cards'] or '暂无'}")
+        text_lines.append(f"最近一次出牌识别：{snapshot['last_cards'] or '暂无'}")
+
+        self.debug_text.configure(state="normal")
+        self.debug_text.delete("1.0", tk.END)
+        self.debug_text.insert("1.0", "\n".join(text_lines))
+        self.debug_text.configure(state="disabled")
 
     def _switch_on(self) -> None:
-        """打开记牌器"""
-        logger.info("用户尝试打开记牌器")
-        self.switch.config(state="disabled")  # 禁用开关按钮以避免重复点击
+        if self.backend.is_running:
+            return
 
-        # 创建主窗口
+        self.start_button.config(state="disabled")
+        self.stop_button.config(state="normal")
+        self.status_var.set("状态：正在运行")
+
         if GUI["MAIN"].get("DISPLAY", True):
-            self.main_window = CounterWindow(WindowsType.MAIN, self)
-            self.windows.append(self.main_window)
-
-        # 创建左侧玩家窗口
+            self.windows.append(CounterWindow(WindowsType.MAIN, self))
         if GUI["LEFT"].get("DISPLAY", True):
-            self.left_window = CounterWindow(WindowsType.LEFT, self)
-            self.windows.append(self.left_window)
-
-        # 创建右侧玩家窗口
+            self.windows.append(CounterWindow(WindowsType.LEFT, self))
         if GUI["RIGHT"].get("DISPLAY", True):
-            self.right_window = CounterWindow(WindowsType.RIGHT, self)
-            self.windows.append(self.right_window)
+            self.windows.append(CounterWindow(WindowsType.RIGHT, self))
 
-        logger.success("所有记牌器窗口创建完毕")
-
-        self.backend.start()  # 运行后端循环代码
-        self.switch.config(
-            text="关闭记牌器", command=self._switch_off
-        )  # 更新开关按钮状态
-
-        # 等待100毫秒后再启用开关按钮，避免后端线程过早关闭
-        self.after(100, lambda: self.switch.config(state="normal"))
-        logger.success("记牌器成功打开")
+        self.backend.start()
+        logger.info("记牌器已启动")
 
     def _switch_off(self) -> None:
-        """关闭记牌器"""
-        logger.info("用户尝试关闭记牌器")
-        self.switch.config(state="disabled")  # 禁用开关按钮以避免重复点击
+        if not self.backend.is_running and not self.windows:
+            return
 
-        self.backend.terminate()  # 关闭后端线程
+        self.start_button.config(state="normal")
+        self.stop_button.config(state="disabled")
+        self.status_var.set("状态：已停止")
+        self.backend.terminate()
 
-        for window in self.windows:  # 关闭所有子窗口
-            window.destroy()
+        for window in list(self.windows):
+            if window.winfo_exists():
+                window.destroy()
+        self.windows = []
+        logger.info("记牌器已停止")
 
-        self.switch.config(
-            text="打开记牌器", command=self._switch_on
-        )  # 重置开关按钮状态
-
-        logger.success("记牌器成功关闭")
-        self._enable_switch()
-
-    def _enable_switch(self) -> None:
-        """在旧的线程（如果存在）终止后启用开关按钮"""
-        if self.backend.is_old_running:
-            self.after(200, self._enable_switch)  # 等待200毫秒后再次检查
-        else:
-            self.switch.config(state="normal")  # 启用开关按钮
+    def destroy(self) -> None:
+        if self.backend.is_running:
+            self.backend.terminate()
+        for window in list(self.windows):
+            if window.winfo_exists():
+                window.destroy()
+        super().destroy()
 
     def delayed_destroy(self) -> None:
-        """延迟销毁窗口，允许后端线程出错时让主窗口自己关闭自身（而不是由后端线程），避免卡死"""
         self.after(1000, self.destroy)
+
+    def confirm_stop_before_edit(self) -> bool:
+        if not self.backend.is_running:
+            return True
+        messagebox.showinfo("请先停止记牌", "正在记牌时不能修改参数，请先关闭记牌器。")
+        return False

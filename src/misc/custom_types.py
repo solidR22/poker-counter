@@ -1,6 +1,8 @@
 """
-自定义枚举类和类型定义。
+公共类型定义。
 """
+
+from __future__ import annotations
 
 import tkinter as tk
 from enum import Enum
@@ -10,8 +12,6 @@ import numpy as np
 
 
 class Card(Enum):
-    """卡牌类型"""
-
     THREE = "3"
     FOUR = "4"
     FIVE = "5"
@@ -25,38 +25,31 @@ class Card(Enum):
     K = "K"
     A = "A"
     TWO = "2"
-    JOKER = "JOKER"
+    SMALL_JOKER = "SMALLJOKER"
+    BIG_JOKER = "BIGJOKER"
 
 
 class Mark(Enum):
-    """标记类型"""
-
     PASS = "PASS"
     LANDLORD = "Landlord"
 
 
 class RegionState(Enum):
-    """区域状态"""
-
-    WAIT = 0  # 等待出牌
-    ACTIVE = 1  # 已出牌
-    PASS = 2  # 不出牌
+    WAIT = 0
+    ACTIVE = 1
+    PASS = 2
 
 
 class Player(Enum):
-    """玩家类型"""
-
     LEFT = "上家"
     MIDDLE = "自己"
     RIGHT = "下家"
 
 
 class WindowsType(Enum):
-    """窗口类型"""
-
-    MAIN = "主窗口"
-    LEFT = "左窗口"
-    RIGHT = "右窗口"
+    MAIN = "主记牌窗"
+    LEFT = "上家统计窗"
+    RIGHT = "下家统计窗"
 
 
 AnyEnum = TypeVar("AnyEnum", bound=Enum)
