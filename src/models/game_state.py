@@ -2,6 +2,8 @@
 游戏状态识别。
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 from loguru import logger
@@ -25,8 +27,12 @@ avatar_regions: dict[Player, Region] = {
     Player.RIGHT: Region(*REGIONS["avatar_right"]),
 }
 
-my_cards_region: Region = Region(*REGIONS["my_cards"])
+my_cards_region = Region(*REGIONS["my_cards"])
 my_cards_region.state = RegionState.ACTIVE
+
+game_over_region = Region(*REGIONS["game_over"])
+game_over_region.state = RegionState.ACTIVE
+
 logger.success("已创建所有识别区域")
 
 
@@ -41,6 +47,9 @@ def refresh_regions(region_config: dict[str, list[list[int]]]) -> None:
 
     my_cards_region.update_coordinates(*region_config["my_cards"])
     my_cards_region.state = RegionState.ACTIVE
+
+    game_over_region.update_coordinates(*region_config["game_over"])
+    game_over_region.state = RegionState.ACTIVE
 
 
 @singleton
@@ -59,6 +68,19 @@ class GameState:
             )[0]
             for player in Player
         }
+
+    @property
+    def game_over_confidence(self) -> float:
+        confidence = best_template_match(
+            game_over_region.region_screenshot,
+            MARK_TEMPLATES[Mark.GAME_OVER],
+        )[0]
+        logger.debug("游戏结束标志识别置信度：{}", confidence)
+        return confidence
+
+    @property
+    def is_game_over(self) -> bool:
+        return self.game_over_confidence >= THRESHOLDS["gameover"]
 
     @property
     def is_game_started(self) -> bool:

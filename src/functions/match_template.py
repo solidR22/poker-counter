@@ -13,7 +13,7 @@ from PIL import Image
 
 from misc.custom_types import AnyImage, Card, CardIntDict, Mark, MatchResult
 
-TEMPLATE_DIR: Path = Path(__file__).parent.parent / "templates"
+TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
 
 CARD_TEMPLATE_NAMES: dict[Card, list[str]] = {
     Card.THREE: ["3"],
@@ -35,12 +35,17 @@ CARD_TEMPLATE_NAMES: dict[Card, list[str]] = {
 
 MARK_TEMPLATE_NAMES: dict[Mark, list[str]] = {
     Mark.PASS: ["PASS"],
-    Mark.LANDLORD: ["Landlord", "LANDLORD", "地主"],
+    Mark.LANDLORD: ["boss"],
+    Mark.GAME_OVER: ["gameover"],
 }
 
 
 def _candidate_paths(template_name: str) -> list[Path]:
-    return [TEMPLATE_DIR / f"{template_name}.png", TEMPLATE_DIR / f"{template_name}.jpg", TEMPLATE_DIR / f"{template_name}.jpeg"]
+    return [
+        TEMPLATE_DIR / f"{template_name}.jpg",
+        TEMPLATE_DIR / f"{template_name}.png",
+        TEMPLATE_DIR / f"{template_name}.jpeg",
+    ]
 
 
 def _load_template(template_name: str) -> AnyImage | None:
@@ -87,9 +92,7 @@ def _can_match(target: AnyImage, template: AnyImage) -> bool:
 
 def template_match(target: AnyImage, template: AnyImage, threshold: float) -> list[MatchResult]:
     if not _can_match(target, template):
-        logger.debug("跳过模板匹配，区域尺寸小于模板。target={} template={}", _shape_2d(target), _shape_2d(template))
         return []
-
     result = matchTemplate(target, template, TM_CCOEFF_NORMED)
     locations = np.where(result >= threshold)
     return [(float(result[pt[1], pt[0]]), pt) for pt in zip(*locations[::-1])]  # type: ignore[list-item]
@@ -97,7 +100,6 @@ def template_match(target: AnyImage, template: AnyImage, threshold: float) -> li
 
 def best_template_match(target: AnyImage, templates: AnyImage | list[AnyImage]) -> MatchResult:
     template_list = templates if isinstance(templates, list) else [templates]
-
     best_value = 0.0
     best_loc = (0, 0)
     for template in template_list:
@@ -111,15 +113,34 @@ def best_template_match(target: AnyImage, templates: AnyImage | list[AnyImage]) 
     return best_value, best_loc
 
 
-def identify_cards(image: AnyImage, threshold: float) -> CardIntDict:
+def identify_cards(target: AnyImage, threshold: float) -> CardIntDict:
+    results, _ = identify_cards_with_matches(target, threshold)
+    return results
+
+
+def identify_cards_with_matches(target: AnyImage, threshold: float) -> tuple[CardIntDict, list[dict[str, int | float | str]]]:
     results: CardIntDict = {}
+    matches_output: list[dict[str, int | float | str]] = []
 
     for card, templates in CARD_TEMPLATES.items():
-        amount = 0
+        count = 0
         for template in templates:
-            amount += len(template_match(image, template, threshold))
-        if amount > 0:
-            results[card] = amount
-            logger.debug("检测到 {} 张 {}", amount, card.value)
+            matches = template_match(target, template, threshold)
+            template_h, template_w = _shape_2d(template)
+            for confidence, (x, y) in matches:
+                matches_output.append(
+                    {
+                        "label": card.value,
+                        "x": int(x),
+                        "y": int(y),
+                        "w": int(template_w),
+                        "h": int(template_h),
+                        "confidence": round(float(confidence), 4),
+                    }
+                )
+            count += len(matches)
+        if count > 0:
+            results[card] = count
+            logger.debug("检测到 {} 张 {}", count, card.value)
 
-    return results
+    return results, matches_output

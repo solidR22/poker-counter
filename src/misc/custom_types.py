@@ -31,7 +31,8 @@ class Card(Enum):
 
 class Mark(Enum):
     PASS = "PASS"
-    LANDLORD = "Landlord"
+    LANDLORD = "boss"
+    GAME_OVER = "gameover"
 
 
 class RegionState(Enum):

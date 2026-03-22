@@ -1,68 +1,83 @@
 REGIONS:
   playing_left:
-    - [499, 440]
-    - [1067, 671]
+  - - 131
+    - 267
+  - - 628
+    - 454
   playing_middle:
-    - [722, 591]
-    - [1538, 720]
+  - - 245
+    - 453
+  - - 1061
+    - 582
   playing_right:
-    - [1176, 437]
-    - [1716, 653]
+  - - 668
+    - 264
+  - - 1124
+    - 455
   my_cards:
-    - [493, 737]
-    - [1723, 965]
+  - - 22
+    - 589
+  - - 1236
+    - 795
   avatar_left:
-    - [560, 300]
-    - [690, 430]
+  - - 16
+    - 307
+  - - 147
+    - 470
   avatar_middle:
-    - [972, 760]
-    - [1110, 900]
+  - - 6
+    - 711
+  - - 172
+    - 858
   avatar_right:
-    - [1510, 300]
-    - [1640, 430]
-
+  - - 1108
+    - 311
+  - - 1264
+    - 477
+  game_over:
+  - - 31
+    - 181
+  - - 1245
+    - 746
 GAME_WINDOW:
-  OFFSET_X: 483
-  OFFSET_Y: 237
-
+  OFFSET_X: 6
+  OFFSET_Y: 99
 THRESHOLDS:
-  card: 0.95
-  landlord: 0.95
-  pass: 0.9
-  wait: 0.9
-
+  card: 0.8
+  landlord: 0.9
+  pass: 0.8
+  wait: 0.8
+  gameover: 0.9
 SCREENSHOT_INTERVAL: 0.1
 GAME_START_INTERVAL: 1.0
-
 GUI:
   MAIN:
     DISPLAY: true
     OPACITY: 1.0
     FONT_SIZE: 25
-    OFFSET_Y: 237
-    CENTER_X: 1183
+    OFFSET_Y: 99
+    CENTER_X: 706
   LEFT:
     DISPLAY: true
     OPACITY: 0.9
     FONT_SIZE: 18
-    CENTER_X: 688
-    CENTER_Y: 693
+    CENTER_X: 211
+    CENTER_Y: 555
   RIGHT:
     DISPLAY: true
     OPACITY: 0.9
     FONT_SIZE: 18
-    OFFSET_X: 1933
-    CENTER_Y: 693
+    OFFSET_X: 1456
+    CENTER_Y: 555
   SWITCH:
+    OPACITY: 1.0
     FONT_SIZE: 12
-    OFFSET_X: 1683
-    OFFSET_Y: 237
-
+    OFFSET_X: 1206
+    OFFSET_Y: 99
 HOTKEYS:
   QUIT: q
   OPEN_LOG: l
   OPEN_SETTINGS: c
   RESET: r
-
 LOG_LEVEL: INFO
 LOG_RETENTION: 3

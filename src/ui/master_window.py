@@ -4,9 +4,12 @@
 
 from __future__ import annotations
 
+from io import BytesIO
+
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from PIL import Image, ImageTk
 from loguru import logger
 
 from core.backend_thread import BackendThread
@@ -22,24 +25,23 @@ from .region_editor import SettingsPanel
 class MasterWindow(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-
         self.backend = BackendThread()
         self.runtime_status = RuntimeStatus()
         self.windows: list[CounterWindow] = []
         self.status_var = tk.StringVar(value="状态：未启动")
-        self.debug_text_var = tk.StringVar(value="等待启动")
+        self.preview_title_var = tk.StringVar(value="识别预览：等待识别")
+        self._preview_photo: ImageTk.PhotoImage | None = None
 
         self._setup_window()
         self._build_layout()
         self.refresh_layout_from_config()
         self._schedule_status_refresh()
-
         logger.success("主控制窗口已创建")
 
     def _setup_window(self) -> None:
         self.title("斗地主记牌器")
         self.configure(bg="#edf2f7")
-        self.minsize(980, 700)
+        self.minsize(1180, 760)
 
         style = ttk.Style(self)
         style.theme_use("clam")
@@ -62,11 +64,9 @@ class MasterWindow(tk.Tk):
         header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
         header.columnconfigure(0, weight=1)
         ttk.Label(header, text="斗地主记牌器", style="Title.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            header,
-            text="在同一个窗口里启动记牌和调整全部参数，便于边看边调。",
-            style="Sub.TLabel",
-        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(header, text="在同一个窗口里启动记牌、看识别状态、调全部参数。", style="Sub.TLabel").grid(
+            row=1, column=0, sticky="w", pady=(4, 0)
+        )
 
         self.notebook = ttk.Notebook(root)
         self.notebook.grid(row=1, column=0, sticky="nsew")
@@ -87,9 +87,7 @@ class MasterWindow(tk.Tk):
         hero = ttk.Frame(self.control_tab, style="Card.TFrame", padding=18)
         hero.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
         hero.columnconfigure(0, weight=1)
-        ttk.Label(hero, text="当前操作", background="#ffffff", font=("Microsoft YaHei UI", 14, "bold")).grid(
-            row=0, column=0, sticky="w"
-        )
+        ttk.Label(hero, text="当前操作", background="#ffffff", font=("Microsoft YaHei UI", 14, "bold")).grid(row=0, column=0, sticky="w")
         ttk.Label(
             hero,
             text="先在“参数设置”中框选头像区、出牌区和手牌区，再回到这里启动记牌。",
@@ -110,19 +108,20 @@ class MasterWindow(tk.Tk):
         status_card = ttk.LabelFrame(self.control_tab, text="运行状态", style="Section.TLabelframe", padding=16)
         status_card.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
         status_card.columnconfigure(0, weight=1)
+        status_card.rowconfigure(2, weight=1)
         ttk.Label(status_card, textvariable=self.status_var, style="Status.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             status_card,
-            text="浮窗可拖动到你习惯的位置。参数保存后，浮窗位置和识别框会立即刷新。",
+            text="这里会实时显示当前识别阶段、置信度、最近结果和成功识别历史。",
             background="#ffffff",
             foreground="#52606d",
             font=("Microsoft YaHei UI", 10),
-            wraplength=420,
+            wraplength=460,
             justify="left",
         ).grid(row=1, column=0, sticky="w", pady=(10, 0))
         self.debug_text = tk.Text(
             status_card,
-            height=14,
+            height=18,
             wrap="word",
             font=("Consolas", 10),
             bg="#f8fafc",
@@ -132,26 +131,14 @@ class MasterWindow(tk.Tk):
         self.debug_text.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
         self.debug_text.insert("1.0", "等待启动")
         self.debug_text.configure(state="disabled")
-        status_card.rowconfigure(2, weight=1)
 
-        tips_card = ttk.LabelFrame(self.control_tab, text="设置建议", style="Section.TLabelframe", padding=16)
-        tips_card.grid(row=1, column=1, sticky="nsew")
-        tips_card.columnconfigure(0, weight=1)
-        tips = [
-            "头像区域只框头像和地主角标，尽量不要带到旁边背景。",
-            "出牌区域只框牌面出现的范围，不要把头像或按钮也框进去。",
-            "我的手牌区域尽量覆盖整排手牌，避免漏掉最左和最右的牌。",
-            "如果游戏窗口位置变了，先在设置里改“游戏窗口左上角”，其他框会整体跟随。",
-        ]
-        for idx, tip in enumerate(tips):
-            ttk.Label(
-                tips_card,
-                text=f"{idx + 1}. {tip}",
-                background="#ffffff",
-                font=("Microsoft YaHei UI", 10),
-                wraplength=320,
-                justify="left",
-            ).grid(row=idx, column=0, sticky="w", pady=(0 if idx == 0 else 10, 0))
+        preview_card = ttk.LabelFrame(self.control_tab, text="识别预览图", style="Section.TLabelframe", padding=16)
+        preview_card.grid(row=1, column=1, sticky="nsew")
+        preview_card.columnconfigure(0, weight=1)
+        preview_card.rowconfigure(1, weight=1)
+        ttk.Label(preview_card, textvariable=self.preview_title_var, background="#ffffff").grid(row=0, column=0, sticky="w")
+        self.preview_label = tk.Label(preview_card, bg="#f8fafc", relief="solid", borderwidth=1)
+        self.preview_label.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
 
     def _build_settings_tab(self) -> None:
         self.settings_tab.columnconfigure(0, weight=1)
@@ -168,11 +155,9 @@ class MasterWindow(tk.Tk):
 
     def _setup_window_position(self, config: ConfigDict) -> None:
         self.update_idletasks()
-        window_width = self.winfo_width()
-        window_height = self.winfo_height()
         x_offset, y_offset = calculate_offset(
-            window_width,
-            window_height,
+            self.winfo_width(),
+            self.winfo_height(),
             config.get("OFFSET_X"),
             config.get("OFFSET_Y"),
             config.get("CENTER_X"),
@@ -190,11 +175,7 @@ class MasterWindow(tk.Tk):
     def _refresh_runtime_status(self) -> None:
         snapshot = self.runtime_status.snapshot()
         self.status_var.set(f"状态：{snapshot['phase']}")
-        region_state_names = {
-            "WAIT": "等待",
-            "ACTIVE": "可识别",
-            "PASS": "不出",
-        }
+        region_state_names = {"WAIT": "等待", "ACTIVE": "可识别", "PASS": "不出"}
 
         text_lines = [
             f"阶段：{snapshot['phase']}",
@@ -206,55 +187,59 @@ class MasterWindow(tk.Tk):
             "地主置信度：",
         ]
         confidences = snapshot["landlord_confidences"]
-        if confidences:
-            text_lines.extend([f"  {name}: {value}" for name, value in confidences.items()])
-        else:
-            text_lines.append("  暂无")
-
+        text_lines.extend([f"  {name}: {value}" for name, value in confidences.items()] or ["  暂无"])
         text_lines.append("")
         text_lines.append("出牌区状态：")
         region_states = snapshot["region_states"]
-        if region_states:
-            text_lines.extend([f"  {name}: {region_state_names.get(value, value)}" for name, value in region_states.items()])
-        else:
-            text_lines.append("  暂无")
-
+        text_lines.extend([f"  {name}: {region_state_names.get(value, value)}" for name, value in region_states.items()] or ["  暂无"])
         text_lines.append("")
         text_lines.append(f"我的手牌识别：{snapshot['my_cards'] or '暂无'}")
         text_lines.append(f"最近一次出牌识别：{snapshot['last_cards'] or '暂无'}")
+        text_lines.append("")
+        text_lines.append("识别成功历史：")
+        history = snapshot.get("recognized_history", [])
+        if history:
+            for index, record in enumerate(reversed(history[-10:]), start=1):
+                text_lines.append(f"  {index}. {record['player']} -> {record['cards']}")
+        else:
+            text_lines.append("  暂无")
 
         self.debug_text.configure(state="normal")
         self.debug_text.delete("1.0", tk.END)
         self.debug_text.insert("1.0", "\n".join(text_lines))
         self.debug_text.configure(state="disabled")
 
+        self.preview_title_var.set(f"识别预览：{snapshot['preview_title']}")
+        preview_png = snapshot.get("preview_png")
+        if preview_png:
+            image = Image.open(BytesIO(preview_png))
+            self._preview_photo = ImageTk.PhotoImage(image)
+            self.preview_label.config(image=self._preview_photo, text="")
+        else:
+            self.preview_label.config(image="", text="暂无图像", font=("Microsoft YaHei UI", 10))
+
     def _switch_on(self) -> None:
         if self.backend.is_running:
             return
-
         self.start_button.config(state="disabled")
         self.stop_button.config(state="normal")
         self.status_var.set("状态：正在运行")
-
         if GUI["MAIN"].get("DISPLAY", True):
             self.windows.append(CounterWindow(WindowsType.MAIN, self))
         if GUI["LEFT"].get("DISPLAY", True):
             self.windows.append(CounterWindow(WindowsType.LEFT, self))
         if GUI["RIGHT"].get("DISPLAY", True):
             self.windows.append(CounterWindow(WindowsType.RIGHT, self))
-
         self.backend.start()
         logger.info("记牌器已启动")
 
     def _switch_off(self) -> None:
         if not self.backend.is_running and not self.windows:
             return
-
         self.start_button.config(state="normal")
         self.stop_button.config(state="disabled")
         self.status_var.set("状态：已停止")
         self.backend.terminate()
-
         for window in list(self.windows):
             if window.winfo_exists():
                 window.destroy()

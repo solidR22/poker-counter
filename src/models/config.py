@@ -22,6 +22,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "avatar_left": [[560, 300], [690, 430]],
         "avatar_middle": [[972, 760], [1110, 900]],
         "avatar_right": [[1510, 300], [1640, 430]],
+        "game_over": [[900, 240], [1060, 330]],
     },
     "GAME_WINDOW": {
         "OFFSET_X": 0,
@@ -32,6 +33,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "landlord": 0.95,
         "pass": 0.9,
         "wait": 0.9,
+        "gameover": 0.9,
     },
     "SCREENSHOT_INTERVAL": 0.1,
     "GAME_START_INTERVAL": 1.0,
@@ -96,16 +98,16 @@ CONFIG_PATH = current_dir() / "config.yaml"
 def load_config(file_path: Path) -> dict[str, Any]:
     if not file_path.exists():
         return copy.deepcopy(DEFAULT_CONFIG)
-    with open(file_path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+    with open(file_path, "r", encoding="utf-8") as file:
+        data = yaml.safe_load(file) or {}
     return _deep_merge(DEFAULT_CONFIG, data)
 
 
 def save_config(config_data: dict[str, Any]) -> None:
     if CONFIG_PATH.exists():
         copyfile(CONFIG_PATH, CONFIG_PATH.with_suffix(".yaml.bak"))
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        yaml.safe_dump(config_data, f, allow_unicode=True, sort_keys=False)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as file:
+        yaml.safe_dump(config_data, file, allow_unicode=True, sort_keys=False)
 
 
 def reload_config() -> dict[str, Any]:

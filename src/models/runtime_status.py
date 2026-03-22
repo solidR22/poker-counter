@@ -25,6 +25,9 @@ class RuntimeStatus:
             "region_states": {},
             "my_cards": {},
             "last_cards": {},
+            "recognized_history": [],
+            "preview_title": "等待识别",
+            "preview_png": None,
             "message": "等待启动",
         }
     )
@@ -32,6 +35,12 @@ class RuntimeStatus:
     def update(self, **kwargs: Any) -> None:
         with self._lock:
             self._data.update(kwargs)
+
+    def append_recognized_play(self, player: str, cards: dict[str, int]) -> None:
+        with self._lock:
+            history = list(self._data["recognized_history"])
+            history.append({"player": player, "cards": dict(cards)})
+            self._data["recognized_history"] = history[-20:]
 
     def reset(self) -> None:
         self.update(
@@ -43,6 +52,9 @@ class RuntimeStatus:
             region_states={},
             my_cards={},
             last_cards={},
+            recognized_history=[],
+            preview_title="等待识别",
+            preview_png=None,
             message="等待启动",
         )
 
@@ -57,5 +69,8 @@ class RuntimeStatus:
                 "region_states": dict(self._data["region_states"]),
                 "my_cards": dict(self._data["my_cards"]),
                 "last_cards": dict(self._data["last_cards"]),
+                "recognized_history": list(self._data["recognized_history"]),
+                "preview_title": self._data["preview_title"],
+                "preview_png": self._data["preview_png"],
                 "message": self._data["message"],
             }
