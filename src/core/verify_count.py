@@ -5,7 +5,7 @@
 from loguru import logger
 
 from misc.custom_types import Card, Player
-from models.counters import CardCounter
+from models.counters import CardCounter, FULL_COUNT
 
 
 class GameEndExamination:
@@ -46,8 +46,8 @@ class GameEndExamination:
         for card in Card:
             if self._counter.remaining_counter[card].get() < 0:
                 logger.warning(f"剩余{card.value}张{card.value}，少于0张。")
-            elif self._counter.remaining_counter[card].get() > 4:
-                logger.warning(f"剩余{card.value}张{card.value}，超过4张。")
+            elif self._counter.remaining_counter[card].get() > FULL_COUNT[card]:
+                logger.warning(f"剩余{card.value}张{card.value}，超过允许上限。")
 
     def _calc_played_range(self) -> None:
         """计算不同玩家最小出牌数和最大出牌数"""
@@ -117,9 +117,9 @@ class GameEndExamination:
                     logger.warning(
                         f"{player.value}记牌器中记录了{card.value}张{card.value}，少于0张。"
                     )
-                elif counter[card].get() > 4:
+                elif counter[card].get() > FULL_COUNT[card]:
                     logger.warning(
-                        f"{player.value}记牌器中记录了{card.value}张{card.value}，超过4张。"
+                        f"{player.value}记牌器中记录了{card.value}张{card.value}，超过允许上限。"
                     )
 
     def _verity_total_sum(self) -> None:

@@ -23,7 +23,7 @@ def _modify_cardvar_dict(intvar_dict: CardIntVarDict, new_values: CardIntDict) -
 
 
 FULL_COUNT = {card: 4 for card in Card}
-FULL_COUNT[Card.JOKER] = 1
+FULL_COUNT[Card.JOKER] = 2
 EMPTY_COUNT = {card: 0 for card in Card}
 
 
@@ -40,7 +40,7 @@ class CardCounter:
         self.player3_remaining_var = tk.IntVar(value=17)
         self.my_cards_text_var = tk.StringVar(value="手牌识别：暂无")
 
-        self.remaining_count = 53
+        self.remaining_count = sum(FULL_COUNT.values())
         self.player1_total = 17
         self.player2_total = 17
         self.player3_total = 17
@@ -68,7 +68,7 @@ class CardCounter:
         _modify_cardvar_dict(self.remaining_counter, FULL_COUNT)
         _modify_cardvar_dict(self.player1_counter, EMPTY_COUNT)
         _modify_cardvar_dict(self.player3_counter, EMPTY_COUNT)
-        self.remaining_count = 53
+        self.remaining_count = sum(FULL_COUNT.values())
         self.player1_total = 17
         self.player2_total = 17
         self.player3_total = 17

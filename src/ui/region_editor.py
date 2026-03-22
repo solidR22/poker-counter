@@ -69,17 +69,17 @@ class SettingsPanel(ttk.Frame):
         self.template_scales_var = tk.StringVar(value="0.85,0.95,1.0,1.05,1.15")
         self.log_vars = {"level": tk.StringVar(value="INFO"), "retention": tk.IntVar(value=3)}
         self.hotkey_vars = {key: tk.StringVar() for key in ("QUIT", "OPEN_LOG", "OPEN_SETTINGS", "RESET")}
-        self.gui_vars: dict[str, dict[str, tk.Variable]] = {}
-        for key in WINDOW_LABELS:
-            self.gui_vars[key] = {
-                "DISPLAY": tk.BooleanVar(value=True),
-                "OPACITY": tk.DoubleVar(value=1.0),
-                "FONT_SIZE": tk.IntVar(value=12),
+        self.gui_vars: dict[str, dict[str, tk.Variable]] = {
+            "MAIN": {"FONT_SIZE": tk.IntVar(value=25)},
+            "LEFT": {"FONT_SIZE": tk.IntVar(value=18)},
+            "RIGHT": {"FONT_SIZE": tk.IntVar(value=18)},
+            "SWITCH": {
                 "OFFSET_X": tk.StringVar(),
                 "OFFSET_Y": tk.StringVar(),
                 "CENTER_X": tk.StringVar(),
                 "CENTER_Y": tk.StringVar(),
-            }
+            },
+        }
         self.region_name_var = tk.StringVar()
         self.region_usage_var = tk.StringVar()
         self.region_example_var = tk.StringVar()
@@ -198,6 +198,49 @@ class SettingsPanel(ttk.Frame):
 
     def _build_window_tab(self) -> None:
         self.window_tab.columnconfigure(0, weight=1)
+        self.window_tab.rowconfigure(2, weight=1)
+
+        tips = ttk.LabelFrame(self.window_tab, text="说明", padding=12)
+        tips.grid(row=0, column=0, sticky="ew")
+        tips.columnconfigure(0, weight=1)
+        ttk.Label(
+            tips,
+            text="剩余牌数显示已经集成到主界面中。这里仅保留内嵌面板字号和主界面窗口位置，旧浮窗相关配置不再使用。",
+            wraplength=760,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+
+        panel_frame = ttk.LabelFrame(self.window_tab, text="记牌面板字号", padding=12)
+        panel_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        panel_frame.columnconfigure(1, weight=1)
+        for row, (key, title) in enumerate(
+            (
+                ("MAIN", "全场剩余字号"),
+                ("LEFT", "上家出牌字号"),
+                ("RIGHT", "下家出牌字号"),
+            )
+        ):
+            ttk.Label(panel_frame, text=title).grid(row=row, column=0, sticky="w", pady=4)
+            ttk.Entry(panel_frame, textvariable=self.gui_vars[key]["FONT_SIZE"]).grid(
+                row=row, column=1, sticky="ew", padx=(8, 0), pady=4
+            )
+
+        switch_frame = ttk.LabelFrame(self.window_tab, text="主界面窗口位置", padding=12)
+        switch_frame.grid(row=2, column=0, sticky="new", pady=(12, 0))
+        switch_frame.columnconfigure(1, weight=1)
+        for row, (field, title) in enumerate(
+            (
+                ("OFFSET_X", "左上角 X"),
+                ("OFFSET_Y", "左上角 Y"),
+                ("CENTER_X", "中心点 X"),
+                ("CENTER_Y", "中心点 Y"),
+            )
+        ):
+            ttk.Label(switch_frame, text=title).grid(row=row, column=0, sticky="w", pady=4)
+            ttk.Entry(switch_frame, textvariable=self.gui_vars["SWITCH"][field]).grid(
+                row=row, column=1, sticky="ew", padx=(8, 0), pady=4
+            )
+        return
         notebook = ttk.Notebook(self.window_tab)
         notebook.grid(row=0, column=0, sticky="nsew")
         for key, label in WINDOW_LABELS.items():
@@ -246,9 +289,9 @@ class SettingsPanel(ttk.Frame):
         for key, value in config_model.HOTKEYS.items():
             if key in self.hotkey_vars:
                 self.hotkey_vars[key].set(value)
-        for key in WINDOW_LABELS:
+        for key, fields in self.gui_vars.items():
             gui_config = config_model.GUI.get(key, {})
-            for field, variable in self.gui_vars[key].items():
+            for field, variable in fields.items():
                 if field in gui_config:
                     variable.set(gui_config[field])
                 elif field.startswith(("OFFSET", "CENTER")):
@@ -279,17 +322,14 @@ class SettingsPanel(ttk.Frame):
             "LOG_LEVEL": self.log_vars["level"].get(),
             "LOG_RETENTION": int(self.log_vars["retention"].get()),
         }
-        for key in WINDOW_LABELS:
-            gui_config: dict[str, object] = {}
-            if key != "SWITCH":
-                gui_config["DISPLAY"] = bool(self.gui_vars[key]["DISPLAY"].get())
-            gui_config["OPACITY"] = float(self.gui_vars[key]["OPACITY"].get())
-            gui_config["FONT_SIZE"] = int(self.gui_vars[key]["FONT_SIZE"].get())
-            for field in ("OFFSET_X", "OFFSET_Y", "CENTER_X", "CENTER_Y"):
-                raw_value = str(self.gui_vars[key][field].get()).strip()
-                if raw_value:
-                    gui_config[field] = int(raw_value)
-            config["GUI"][key] = gui_config
+        for key in ("MAIN", "LEFT", "RIGHT"):
+            config["GUI"][key] = {"FONT_SIZE": int(self.gui_vars[key]["FONT_SIZE"].get())}
+        switch_config: dict[str, object] = {}
+        for field in ("OFFSET_X", "OFFSET_Y", "CENTER_X", "CENTER_Y"):
+            raw_value = str(self.gui_vars["SWITCH"][field].get()).strip()
+            if raw_value:
+                switch_config[field] = int(raw_value)
+        config["GUI"]["SWITCH"] = switch_config
         return config
 
     def save_all(self) -> None:
@@ -439,16 +479,8 @@ class SettingsPanel(ttk.Frame):
             self._regions[name][0][1] += dy
             self._regions[name][1][0] += dx
             self._regions[name][1][1] += dy
-        self._shift_window_positions(dx, dy)
         self._sync_inputs_from_region()
         self._draw_regions()
-
-    def _shift_window_positions(self, dx: int, dy: int) -> None:
-        for key in WINDOW_LABELS:
-            for field, delta in (("OFFSET_X", dx), ("OFFSET_Y", dy), ("CENTER_X", dx), ("CENTER_Y", dy)):
-                raw = str(self.gui_vars[key][field].get()).strip()
-                if raw:
-                    self.gui_vars[key][field].set(str(int(raw) + delta))
 
     def _apply_game_origin_entries(self) -> None:
         self._set_game_origin(self.game_origin_vars["x"].get(), self.game_origin_vars["y"].get())

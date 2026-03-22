@@ -111,6 +111,18 @@ def save_config(config_data: dict[str, Any]) -> None:
         yaml.safe_dump(config_data, file, allow_unicode=True, sort_keys=False)
 
 
+def save_gui_window_position(window_name: str, x: int, y: int) -> None:
+    config_data = load_config(CONFIG_PATH)
+    gui_config = config_data.setdefault("GUI", {})
+    window_config = gui_config.setdefault(window_name, {})
+    window_config["OFFSET_X"] = x
+    window_config["OFFSET_Y"] = y
+    window_config.pop("CENTER_X", None)
+    window_config.pop("CENTER_Y", None)
+    save_config(config_data)
+    reload_config()
+
+
 def reload_config() -> dict[str, Any]:
     global config, REGIONS, GAME_WINDOW, THRESHOLDS, SCREENSHOT_INTERVAL
     global GAME_START_INTERVAL, TEMPLATE_SCALES, GUI, HOTKEYS, LOG_LEVEL, LOG_RETENTION

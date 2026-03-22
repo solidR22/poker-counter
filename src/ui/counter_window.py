@@ -14,7 +14,7 @@ from core.backend_thread import BackendThread
 from functions.windows_offset import calculate_offset
 from misc.custom_types import Card, ConfigDict, WindowsType
 from misc.open_file import open_latest_log
-from models.config import GUI, HOTKEYS
+from models.config import GUI, HOTKEYS, save_gui_window_position
 from models.counters import CardCounter
 from models.labels import LabelProperties
 
@@ -59,6 +59,7 @@ class CounterWindow(tk.Toplevel):
     def _setup_binding(self) -> None:
         self.bind("<Button-1>", self._on_drag_start)  # type: ignore[override]
         self.bind("<B1-Motion>", self._on_drag_move)  # type: ignore[override]
+        self.bind("<ButtonRelease-1>", self._on_drag_end)  # type: ignore[override]
         hotkey_dict: dict[str, Callable[[Any], None]] = {
             "QUIT": lambda event: self.PARENT.destroy(),
             "OPEN_LOG": lambda event: open_latest_log(),
@@ -150,6 +151,10 @@ class CounterWindow(tk.Toplevel):
         x = self.winfo_x() + (event.x - self._drag_start_x)
         y = self.winfo_y() + (event.y - self._drag_start_y)
         self.geometry(f"+{x}+{y}")
+
+    def _on_drag_end(self, event: tk.Event) -> None:  # type: ignore[override]
+        del event
+        save_gui_window_position(self.WINDOW_TYPE.name, self.winfo_x(), self.winfo_y())
 
     def _reset(self) -> None:
         backend = BackendThread()
