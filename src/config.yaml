@@ -1,24 +1,24 @@
 REGIONS:
   playing_left:
   - - 206
-    - 224
+    - 246
   - - 703
-    - 411
+    - 433
   playing_middle:
   - - 320
     - 410
   - - 1136
     - 539
   playing_right:
-  - - 743
-    - 221
-  - - 1199
-    - 412
+  - - 737
+    - 240
+  - - 1193
+    - 431
   my_cards:
-  - - 97
-    - 546
-  - - 1311
-    - 752
+  - - 87
+    - 552
+  - - 1301
+    - 758
   avatar_left:
   - - 91
     - 264
@@ -43,7 +43,7 @@ GAME_WINDOW:
   OFFSET_X: 81
   OFFSET_Y: 56
 THRESHOLDS:
-  card: 0.9
+  card: 0.7
   landlord: 0.9
   pass: 0.8
   wait: 0.8
@@ -62,13 +62,17 @@ TEMPLATE_SCALES:
 - 1.15
 - 1.2
 - 1.25
+- 1.3
+- 1.4
+- 1.5
 GUI:
   MAIN:
     DISPLAY: true
     OPACITY: 1.0
     FONT_SIZE: 25
+    CENTER_X: 700
     OFFSET_Y: 657
-    OFFSET_X: 19
+    OFFSET_X: -8
   LEFT:
     DISPLAY: true
     OPACITY: 0.9
@@ -83,8 +87,8 @@ GUI:
     CENTER_Y: 456
   SWITCH:
     FONT_SIZE: 12
-    OFFSET_X: 1224
-    OFFSET_Y: 215
+    OFFSET_X: 1069
+    OFFSET_Y: 44
 HOTKEYS:
   QUIT: q
   OPEN_LOG: l

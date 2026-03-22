@@ -14,7 +14,7 @@ from core.backend_thread import BackendThread
 from functions.match_template import identify_cards_with_matches
 from functions.windows_offset import calculate_offset
 from misc.custom_types import ConfigDict
-from models.config import GUI, THRESHOLDS, reload_config
+from models.config import GUI, THRESHOLDS, reload_config, save_gui_window_position
 from models.runtime_status import RuntimeStatus
 
 from .counter_display_window import CounterDisplayWindow
@@ -32,9 +32,12 @@ class MasterWindow(tk.Tk):
         self.preview_zoom_var = tk.StringVar(value="100%")
         self._preview_photo: ImageTk.PhotoImage | None = None
         self._preview_zoom = 1.0
+        self._save_after_id: str | None = None
+        self._suspend_position_save = False
 
         self._setup_window()
         self._build_layout()
+        self._setup_binding()
         self.refresh_layout_from_config()
         self._schedule_status_refresh()
         logger.success("主界面已创建")
@@ -68,7 +71,7 @@ class MasterWindow(tk.Tk):
         ttk.Label(header, text="斗地主记牌器", style="Title.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             header,
-            text="主界面只保留控制、状态和调试预览。牌数统计会单独显示在一个可移动的小窗口里，尽量不占用打牌区域。",
+            text="主界面只保留控制、状态和调试预览。牌数统计会显示在独立的小窗口里，尽量不占用打牌区域。",
             style="Sub.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(4, 0))
 
@@ -94,7 +97,7 @@ class MasterWindow(tk.Tk):
         )
         ttk.Label(
             hero,
-            text="开始记牌后会自动打开独立记牌窗口。你可以把那个窗口拖到牌桌边缘，主界面则留给状态观察和调试。",
+            text="开始记牌后会自动打开独立记牌窗口。你可以把它拖到牌桌边缘；主界面留给状态观察和调试。",
             background="#ffffff",
             foreground="#52606d",
             font=("Microsoft YaHei UI", 10),
@@ -185,8 +188,11 @@ class MasterWindow(tk.Tk):
     def _build_settings_tab(self) -> None:
         self.settings_tab.columnconfigure(0, weight=1)
         self.settings_tab.rowconfigure(0, weight=1)
-        self.settings_panel = SettingsPanel(self.settings_tab, on_saved=self.refresh_layout_from_config)
+        self.settings_panel = SettingsPanel(self.settings_tab, on_saved=self.apply_saved_settings)
         self.settings_panel.grid(row=0, column=0, sticky="nsew")
+
+    def _setup_binding(self) -> None:
+        self.bind("<Configure>", self._on_configure)  # type: ignore[override]
 
     def _open_counter_window(self) -> None:
         if self.counter_window and self.counter_window.winfo_exists():
@@ -207,7 +213,15 @@ class MasterWindow(tk.Tk):
         if self.counter_window and self.counter_window.winfo_exists():
             self.counter_window.refresh_position()
 
+    def apply_saved_settings(self) -> None:
+        reload_config()
+        if self.counter_window and self.counter_window.winfo_exists():
+            self.counter_window.apply_runtime_config()
+            save_gui_window_position("MAIN", self.counter_window.winfo_x(), self.counter_window.winfo_y())
+        save_gui_window_position("SWITCH", self.winfo_x(), self.winfo_y())
+
     def _setup_window_position(self, config: ConfigDict) -> None:
+        self._suspend_position_save = True
         self.update_idletasks()
         x_offset, y_offset = calculate_offset(
             self.winfo_width(),
@@ -218,6 +232,21 @@ class MasterWindow(tk.Tk):
             config.get("CENTER_Y"),
         )
         self.geometry(f"+{x_offset}+{y_offset}")
+        self.after(250, self._resume_position_save)
+
+    def _resume_position_save(self) -> None:
+        self._suspend_position_save = False
+
+    def _on_configure(self, event: tk.Event) -> None:  # type: ignore[override]
+        if event.widget is not self or self.state() != "normal" or self._suspend_position_save:
+            return
+        if self._save_after_id:
+            self.after_cancel(self._save_after_id)
+        self._save_after_id = self.after(200, self._save_position)
+
+    def _save_position(self) -> None:
+        self._save_after_id = None
+        save_gui_window_position("SWITCH", self.winfo_x(), self.winfo_y())
 
     def show_settings(self) -> None:
         self.notebook.select(self.settings_tab)

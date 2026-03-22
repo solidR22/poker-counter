@@ -22,6 +22,8 @@ class CounterDisplayWindow(tk.Toplevel):
         self._setup_binding()
 
     def _build_ui(self) -> None:
+        for child in self.winfo_children():
+            child.destroy()
         container = ttk.Frame(self, padding=8)
         container.pack(fill="both", expand=True)
         container.columnconfigure(0, weight=1)
@@ -34,6 +36,13 @@ class CounterDisplayWindow(tk.Toplevel):
 
     def refresh_position(self) -> None:
         self._setup_window_position(GUI.get("MAIN", {}))
+
+    def apply_runtime_config(self) -> None:
+        current_x = self.winfo_x()
+        current_y = self.winfo_y()
+        self._build_ui()
+        self.update_idletasks()
+        self.geometry(f"+{current_x}+{current_y}")
 
     def _setup_window_position(self, config: ConfigDict) -> None:
         self.update_idletasks()
